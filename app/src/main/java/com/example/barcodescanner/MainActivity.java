@@ -9,17 +9,12 @@ import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Point;
-import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
-import android.media.Image;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -28,25 +23,19 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.View;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ImageView;
 
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.ml.vision.FirebaseVision;
 import com.google.firebase.ml.vision.barcode.FirebaseVisionBarcode;
 import com.google.firebase.ml.vision.barcode.FirebaseVisionBarcodeDetector;
-import com.google.firebase.ml.vision.barcode.FirebaseVisionBarcodeDetectorOptions;
 import com.google.firebase.ml.vision.common.FirebaseVisionImage;
 import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
 
 import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -55,9 +44,6 @@ public class MainActivity extends AppCompatActivity {
     ImageView imageView;
     Button button;
     Bitmap bitmap;
-    Bitmap myBitmap;
-    Integer myInt = 0;
-
     static {
         ORIENTATIONS.append(Surface.ROTATION_0, 90);
         ORIENTATIONS.append(Surface.ROTATION_90, 0);
@@ -65,27 +51,23 @@ public class MainActivity extends AppCompatActivity {
         ORIENTATIONS.append(Surface.ROTATION_270, 180);
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         checkPermissions(getApplicationContext(), "Manifest.permission.READ_EXTERNAL_STORAGE");
         addListenerOnButton();
-        processFirebaseVisionImage(setBitmap());
-        //Log.d("Survey says", myResult.toString());
+        Long myResult = processFirebaseVisionImage(setBitmap());
+        Log.d("Survey says", myResult.toString());
     }
 
-    public int checkPermissions(Context context, String permission) {
+    public void checkPermissions(Context context, String permission) {
         if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
             Log.d("Permission", "Denied");
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE);
-            return 0;
         } else {
             Log.d("Permission", "Granted");
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE);
-            return 1;
         }
     }
 
@@ -106,13 +88,9 @@ public class MainActivity extends AppCompatActivity {
         imageView.setImageBitmap(bitmap);
     }
 
-    public void setBitmap(Bitmap bitmap) {
-        myBitmap = bitmap;
-    }
-
     public void addListenerOnButton() {
-        imageView = (ImageView) findViewById(R.id.imageView);
-        button = (Button) findViewById(R.id.updateImageButton);
+        imageView = findViewById(R.id.imageView);
+        button = findViewById(R.id.updateImageButton);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View arg0) {
@@ -121,41 +99,14 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    public void getBitmap() {
-        if (bitmap == null) {
-            Log.d("Bitmapisnull", "Yes");
-        } else {
-            Log.d("Bitmapisnull", "NO");
-        }
-    }
-
-    public int processFirebaseVisionImage(Bitmap bitmap) {
-        String myTest = null;
-        //final List<String> UPC = null;
-        if (bitmap == null) {
-            Log.d("Is Bitmap Null", "Yes");
-            return 0;
-        } else {
-            Log.d("Is Bitmap Null", "No");
-        }
-
+    public long processFirebaseVisionImage(Bitmap bitmap){
         FirebaseVisionImage image = com.google.firebase.ml.vision.common.FirebaseVisionImage.fromBitmap(bitmap);
-
         FirebaseVisionBarcodeDetector detector = FirebaseVision.getInstance()
                 .getVisionBarcodeDetector();
         Task<List<FirebaseVisionBarcode>> result = detector.detectInImage(image)
                 .addOnSuccessListener(new OnSuccessListener<List<FirebaseVisionBarcode>>() {
                     public void onSuccess(List<FirebaseVisionBarcode> barcodes) {
                         System.out.println("Image read was a success");
-                        /*
-                        for (FirebaseVisionBarcode barcode : barcodes) {
-                            myTest = barcode.getDisplayValue();
-                            Log.d("myTest", myTest);
-                            //UPC.add(barcode.getDisplayValue());
-
-                        }
-                        */
-                      barcodes.get(0).getRawValue();
                     }
                 })
                 .addOnFailureListener(new OnFailureListener() {
@@ -163,14 +114,31 @@ public class MainActivity extends AppCompatActivity {
                     public void onFailure(@NonNull Exception e) {
                         System.out.println("Image read was a Failure");
                     }
+                })
+                .addOnCompleteListener(new OnCompleteListener<List<FirebaseVisionBarcode>>() {
+                    @Override
+                    public void onComplete(@NonNull Task<List<FirebaseVisionBarcode>> task) {
+                        System.out.println("Completed");
+                    }
                 });
-        /*
-        Integer myResult = Integer.parseInt(UPC.get(0));
-        return myResult;
-        */
-        return 1;
+        while (!result.isComplete()){
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e){
+                e.printStackTrace();
+            }
+        }
+
+        if (!result.isSuccessful() || !result.isComplete()){
+            return 1;
+        }
+        {
+            long UPC = Long.parseLong(result.getResult().get(0).getRawValue());
+            return UPC;
+        }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private int getRotationCompensation(String cameraId, Activity activity, Context context)
             throws CameraAccessException {
         // Get the device's current rotation relative to its "native" orientation.
@@ -203,6 +171,5 @@ public class MainActivity extends AppCompatActivity {
                 //Log.e(TAG, "Bad rotation value: " + rotationCompensation);
         }
         return result;
-
     }
 }
